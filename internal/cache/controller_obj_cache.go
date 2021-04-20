@@ -2377,11 +2377,17 @@ func ValidateUserInput(client *clients.AviClient) bool {
 
 	isTenantValid := checkTenant(client)
 	isCloudValid := checkAndSetCloudType(client)
+	utils.AviLog.Infof("xxx validating ... 1 ")
+
 	isRequiredValuesValid := checkRequiredValuesYaml()
+	utils.AviLog.Infof("xxx validating ... 2 ")
+
 	if lib.GetAdvancedL4() && isTenantValid && isCloudValid && isRequiredValuesValid {
 		utils.AviLog.Info("All values verified for advanced L4, proceeding with bootup")
 		return true
 	}
+
+	utils.AviLog.Infof("xxx validating ... 3 ")
 
 	isSegroupValid := isCloudValid && validateAndConfigureSeGroup(client)
 	isNodeNetworkValid := isCloudValid && checkNodeNetwork(client)
@@ -2394,6 +2400,8 @@ func ValidateUserInput(client *clients.AviClient) bool {
 		checkAndSetVRFFromNetwork(client) &&
 		lib.IsValidCni()
 
+	utils.AviLog.Infof("xxx validating ... 4 ")
+
 	if !isValid {
 		if !isCloudValid || !isSegroupValid || !isNodeNetworkValid {
 			utils.AviLog.Warn("Invalid input detected, AKO will be rebooted to retry")
@@ -2401,6 +2409,7 @@ func ValidateUserInput(client *clients.AviClient) bool {
 		}
 		utils.AviLog.Warn("Invalid input detected, sync will be disabled.")
 	}
+	utils.AviLog.Infof("xxx Done validating ...")
 	return isValid
 }
 
@@ -2422,7 +2431,7 @@ func checkRequiredValuesYaml() bool {
 	}
 
 	// check if config map exists
-	k8sClient := utils.GetInformers().ClientSet
+	/*k8sClient := utils.GetInformers().ClientSet
 	aviCMNamespace := utils.GetAKONamespace()
 	if lib.GetNamespaceToSync() != "" {
 		aviCMNamespace = lib.GetNamespaceToSync()
@@ -2431,7 +2440,7 @@ func checkRequiredValuesYaml() bool {
 	if err != nil {
 		utils.AviLog.Errorf("Configmap %s/%s not found, error: %v, syncing will be disabled", aviCMNamespace, lib.AviConfigMap, err)
 		return false
-	}
+	}*/
 
 	return true
 }

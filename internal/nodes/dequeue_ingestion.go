@@ -37,20 +37,31 @@ func DequeueIngestion(key string, fullsync bool) {
 	utils.AviLog.Infof("key: %s, msg: starting graph Sync", key)
 	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
 
-	objType, namespace, name := lib.ExtractTypeNameNamespace(key)
+	//objType, namespace, name := lib.ExtractTypeNameNamespace(key)
+	clusterName, objType, namespace, name := lib.ExtractClusterNameNamespace(key)
+	utils.AviLog.Infof("key: %s, clustername: %v", key, clusterName)
+
 	if objType == utils.Pod {
-		handlePod(key, namespace, name, fullsync)
+		handlePod(clusterName, key, namespace, name, fullsync)
 	}
 
 	schema, valid := ConfigDescriptor().GetByType(objType)
 	if valid {
+		utils.AviLog.Infof("xxx CP01")
+
 		// If it's an ingress related change, let's process that.
-		if utils.GetInformers().IngressInformer != nil && schema.GetParentIngresses != nil {
-			ingressNames, ingressFound = schema.GetParentIngresses(name, namespace, key)
-		} else if utils.GetInformers().RouteInformer != nil && schema.GetParentRoutes != nil {
+		if utils.GetInformersMultiCluster(clusterName).IngressInformer != nil && schema.GetParentIngresses != nil {
+			utils.AviLog.Infof("xxx CP011")
+
+			ingressNames, ingressFound = schema.GetParentIngresses(clusterName, name, namespace, key)
+		} else if utils.GetInformersMultiCluster(clusterName).RouteInformer != nil && schema.GetParentRoutes != nil {
+			utils.AviLog.Infof("xxx CP0112")
+
 			routeNames, routeFound = schema.GetParentRoutes(name, namespace, key)
 		}
 	}
+
+	utils.AviLog.Infof("xxx CP1")
 
 	// if we get update for object of type k8s node, create vrf graph
 	// if in NodePort Mode we update pool servers
@@ -60,7 +71,7 @@ func DequeueIngestion(key string, fullsync bool) {
 		if lib.IsNodePortMode() && !fullsync {
 			svcl4Keys, svcl7Keys := lib.GetSvcKeysForNodeCRUD()
 			for _, svcl4Key := range svcl4Keys {
-				handleL4Service(svcl4Key, fullsync)
+				handleL4Service(clusterName, svcl4Key, fullsync)
 			}
 			for _, svcl7Key := range svcl7Keys {
 				_, namespace, svcName := lib.ExtractTypeNameNamespace(svcl7Key)
@@ -69,7 +80,7 @@ func DequeueIngestion(key string, fullsync bool) {
 					if !filteredIngressFound {
 						continue
 					}
-					handleIngress(svcl7Key, fullsync, filteredIngressNames)
+					handleIngress(clusterName, svcl7Key, fullsync, filteredIngressNames)
 				}
 				if routeFound {
 					filteredRouteFound, filteredRouteNames := objects.OshiftRouteSvcLister().IngressMappings(namespace).GetSvcToIng(svcName)
@@ -82,6 +93,7 @@ func DequeueIngestion(key string, fullsync bool) {
 		}
 		return
 	}
+	utils.AviLog.Infof("xxx CP2")
 
 	if objType == utils.Service {
 		objects.SharedClusterIpLister().Save(namespace+"/"+name, name)
@@ -98,6 +110,8 @@ func DequeueIngestion(key string, fullsync bool) {
 		}
 	}
 
+	utils.AviLog.Infof("xxx CP3")
+
 	if routeFound {
 		handleRoute(key, fullsync, routeNames)
 	}
@@ -107,18 +121,22 @@ func DequeueIngestion(key string, fullsync bool) {
 		svcNames, svcFound := schema.GetParentServices(name, namespace, key)
 		if svcFound && utils.CheckIfNamespaceAccepted(namespace) {
 			for _, svcNSNameKey := range svcNames {
-				handleL4Service(utils.L4LBService+"/"+svcNSNameKey, fullsync)
+				handleL4Service(clusterName, utils.L4LBService+"/"+svcNSNameKey, fullsync)
 			}
 		}
 	}
 
+	utils.AviLog.Infof("xxx CP4")
+
 	if !ingressFound && !lib.GetAdvancedL4() && !lib.UseServicesAPI() {
+		utils.AviLog.Infof("xxx CP41")
+
 		// If ingress is not found, let's do the other checks.
 		if objType == utils.L4LBService {
 			// L4 type of services need special handling. We create a dedicated VS in Avi for these.
-			handleL4Service(key, fullsync)
+			handleL4Service(clusterName, key, fullsync)
 		} else if objType == utils.Endpoints {
-			svcObj, err := utils.GetInformers().ServiceInformer.Lister().Services(namespace).Get(name)
+			svcObj, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(namespace).Get(name)
 			if err != nil {
 				utils.AviLog.Debugf("key: %s, msg: there was an error in retrieving the service for endpoint", key)
 				return
@@ -138,7 +156,7 @@ func DequeueIngestion(key string, fullsync bool) {
 			}
 		}
 	} else {
-		handleIngress(key, fullsync, ingressNames)
+		handleIngress(clusterName, key, fullsync, ingressNames)
 	}
 
 	// handle the services APIs
@@ -178,7 +196,7 @@ func DequeueIngestion(key string, fullsync bool) {
 
 // handlePod populates NPL annotations for a pod in store.
 // It also stores a mapping of Pod to Services for future use
-func handlePod(key, namespace, podName string, fullsync bool) {
+func handlePod(clusterName, key, namespace, podName string, fullsync bool) {
 	utils.AviLog.Debugf("key: %s, msg: handing Pod", key)
 	podKey := namespace + "/" + podName
 	pod, err := utils.GetInformers().PodInformer.Lister().Pods(namespace).Get(podName)
@@ -198,7 +216,7 @@ func handlePod(key, namespace, podName string, fullsync bool) {
 					utils.AviLog.Debugf("key: %s, msg: handling l4 Services %v", key, lbSvcs)
 					for _, lbSvc := range lbSvcs {
 						lbSvcKey := utils.L4LBService + "/" + lbSvc
-						handleL4Service(lbSvcKey, fullsync)
+						handleL4Service(clusterName, lbSvcKey, fullsync)
 					}
 				}
 			} else {
@@ -226,7 +244,7 @@ func handlePod(key, namespace, podName string, fullsync bool) {
 			for _, lbSvc := range lbSvcs {
 				lbSvcKey := utils.L4LBService + "/" + lbSvc
 				utils.AviLog.Debugf("key: %s, msg: handling l4 svc %s", key, lbSvcKey)
-				handleL4Service(lbSvcKey, fullsync)
+				handleL4Service(clusterName, lbSvcKey, fullsync)
 			}
 			utils.AviLog.Infof("key: %s, msg: NPL Services retrieved: %s", key, services)
 		}
@@ -293,12 +311,12 @@ func handleRoute(key string, fullsync bool, routeNames []string) {
 	for _, route := range routeNames {
 		nsroute, nameroute := getIngressNSNameForIngestion(objType, namespace, route)
 		utils.AviLog.Infof("key: %s, msg: processing route: %s", key, route)
-		HostNameShardAndPublish(utils.OshiftRoute, nameroute, nsroute, key, fullsync, sharedQueue)
+		HostNameShardAndPublish("", utils.OshiftRoute, nameroute, nsroute, key, fullsync, sharedQueue)
 	}
 	return
 }
 
-func handleL4Service(key string, fullsync bool) {
+func handleL4Service(clusterName, key string, fullsync bool) {
 	if lib.GetLayer7Only() {
 		// If the layer 7 only flag is set, then we shouldn't handling layer 4 VSes.
 		utils.AviLog.Debugf("key: %s, msg: not handling service of type loadbalancer since AKO is configured to run in layer 7 mode only", key)
@@ -310,7 +328,7 @@ func handleL4Service(key string, fullsync bool) {
 	if !isServiceDelete(name, namespace, key) && utils.CheckIfNamespaceAccepted(namespace) {
 		// If Service is Not Annotated with NPL annotation, annotate the service and return.
 		if lib.AutoAnnotateNPLSvc() {
-			if !status.CheckNPLSvcAnnotation(key, namespace, name) {
+			if !status.CheckNPLSvcAnnotation(clusterName, key, namespace, name) {
 				statusOption := status.StatusOptions{
 					ObjType:   lib.NPLService,
 					Op:        lib.UpdateStatus,
@@ -340,10 +358,10 @@ func handleL4Service(key string, fullsync bool) {
 		if found {
 			// This is transition from clusterIP to service of type LB
 			objects.SharedClusterIpLister().Delete(namespace + "/" + name)
-			affectedIngs, _ := SvcToIng(name, namespace, key)
+			affectedIngs, _ := SvcToIng(clusterName, name, namespace, key)
 			for _, ingress := range affectedIngs {
 				utils.AviLog.Infof("key: %s, msg: transition case from ClusterIP to service of type Loadbalancer: %s", key, ingress)
-				HostNameShardAndPublish(utils.Ingress, ingress, namespace, key, fullsync, sharedQueue)
+				HostNameShardAndPublish("", utils.Ingress, ingress, namespace, key, fullsync, sharedQueue)
 			}
 		}
 		return
@@ -358,14 +376,15 @@ func handleL4Service(key string, fullsync bool) {
 	}
 }
 
-func handleIngress(key string, fullsync bool, ingressNames []string) {
-	objType, namespace, _ := lib.ExtractTypeNameNamespace(key)
+func handleIngress(clusterName, key string, fullsync bool, ingressNames []string) {
+	utils.AviLog.Infof("xxx processing ingress: %v", clusterName)
+	_, objType, namespace, _ := lib.ExtractClusterNameNamespace(key)
 	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
 	// The only other shard scheme we support now is hostname sharding.
 	for _, ingress := range ingressNames {
 		nsing, nameing := getIngressNSNameForIngestion(objType, namespace, ingress)
 		utils.AviLog.Debugf("key: %s, msg: processing ingress: %s", key, ingress)
-		HostNameShardAndPublish(utils.Ingress, nameing, nsing, key, fullsync, sharedQueue)
+		HostNameShardAndPublish(clusterName, utils.Ingress, nameing, nsing, key, fullsync, sharedQueue)
 	}
 }
 
@@ -472,11 +491,41 @@ func (descriptor GraphDescriptor) GetByType(name string) (GraphSchema, bool) {
 	return GraphSchema{}, false
 }
 
+func GetShardVSPrefixMultiCluster(key, clusterName string) string {
+	// sample prefix: clusterName--Shared-L7-
+	shardVsPrefix := clusterName + "-" + lib.ShardVSPrefix + "-"
+	utils.AviLog.Debugf("key: %s, msg: ShardVSPrefix: %s", key, shardVsPrefix)
+	return shardVsPrefix
+}
+
 func GetShardVSPrefix(key string) string {
 	// sample prefix: clusterName--Shared-L7-
 	shardVsPrefix := lib.GetNamePrefix() + lib.ShardVSPrefix + "-"
 	utils.AviLog.Debugf("key: %s, msg: ShardVSPrefix: %s", key, shardVsPrefix)
 	return shardVsPrefix
+}
+
+func GetShardVSNameMultiCluster(clusterName, s string, key string, shardSize uint32, prefix ...string) string {
+	var vsNum uint32
+	extraPrefix := strings.Join(prefix, "-")
+
+	if shardSize != 0 {
+		vsNum = utils.Bkt(s, shardSize)
+		utils.AviLog.Debugf("key: %s, msg: VS number: %v", key, vsNum)
+	} else {
+		utils.AviLog.Debugf("key: %s, msg: Processing dedicated VS", key)
+		//format: my-cluster--foo.com-dedicated for dedicated VS. This is to avoid any SNI naming conflicts
+		if extraPrefix != "" {
+			return clusterName + "-" + extraPrefix + "-" + s + "-dedicated"
+		}
+		return clusterName + "-" + s + "-dedicated"
+	}
+	shardVsPrefix := GetShardVSPrefixMultiCluster(key, clusterName)
+	if extraPrefix != "" {
+		shardVsPrefix += extraPrefix + "-"
+	}
+	vsName := shardVsPrefix + strconv.Itoa(int(vsNum))
+	return vsName
 }
 
 func GetShardVSName(s string, key string, shardSize uint32, prefix ...string) string {
@@ -544,7 +593,7 @@ func DeriveShardVS(hostname string, key string, routeIgrObj RouteIngressModel) (
 		newInfraPrefix = newSetting.Name
 	}
 
-	oldVsName, newVsName := GetShardVSName(hostname, key, oldShardSize, oldInfraPrefix), GetShardVSName(hostname, key, newShardSize, newInfraPrefix)
+	oldVsName, newVsName := GetShardVSNameMultiCluster(routeIgrObj.GetCluster(), hostname, key, oldShardSize, oldInfraPrefix), GetShardVSNameMultiCluster(routeIgrObj.GetCluster(), hostname, key, newShardSize, newInfraPrefix)
 	utils.AviLog.Infof("key: %s, msg: ShardVSNames: %s %s", key, oldVsName, newVsName)
 	return oldVsName, newVsName
 }

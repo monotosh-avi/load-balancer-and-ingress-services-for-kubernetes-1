@@ -145,6 +145,7 @@ func RandomSeq(n int) string {
 
 var informer sync.Once
 var informerInstance *Informers
+var informerList map[string]*Informers
 
 func instantiateInformers(kubeClient KubeClientIntf, registeredInformers []string, ocs oshiftclientset.Interface, namespace string, akoNSBoundInformer bool) *Informers {
 	cs := kubeClient.ClientSet
@@ -262,6 +263,18 @@ func GetInformers() *Informers {
 		return nil
 	}
 	return informerInstance
+}
+
+func SetInformersMultiCluster(clusterName string, inf *Informers) {
+	if informerList == nil {
+		informerList = make(map[string]*Informers)
+	}
+	informerList[clusterName] = inf
+}
+
+func GetInformersMultiCluster(clusterName string) *Informers {
+	AviLog.Infof("getting informers for cluster: %v, %v", clusterName, informerList[clusterName])
+	return informerList[clusterName]
 }
 
 func Stringify(serialize interface{}) string {

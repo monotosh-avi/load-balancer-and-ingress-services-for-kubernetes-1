@@ -193,6 +193,21 @@ func GetL7SharedPGName(vsName string) string {
 	return vsName
 }
 
+func GetL7PoolNameMultiCluster(clusterName, priorityLabel, namespace, ingName, infrasetting string, args ...string) string {
+	priorityLabel = strings.ReplaceAll(priorityLabel, "/", "_")
+	var poolName string
+	if infrasetting != "" {
+		poolName = clusterName + "-" + infrasetting + "-" + priorityLabel + "-" + namespace + "-" + ingName
+	} else {
+		poolName = clusterName + "-" + priorityLabel + "-" + namespace + "-" + ingName
+	}
+	if len(args) > 0 {
+		svcName := args[0]
+		poolName = poolName + "-" + svcName
+	}
+	return poolName
+}
+
 func GetL7PoolName(priorityLabel, namespace, ingName, infrasetting string, args ...string) string {
 	priorityLabel = strings.ReplaceAll(priorityLabel, "/", "_")
 	var poolName string
@@ -686,7 +701,7 @@ func DSChecksum(pgrefs []string, markers []*models.RoleFilterMatchLabel, populat
 	return checksum
 }
 
-func InformersToRegister(oclient *oshiftclient.Clientset, kclient *kubernetes.Clientset) ([]string, error) {
+func InformersToRegister(oclient *oshiftclient.Clientset, kclient *kubernetes.Clientset, clusterName string) ([]string, error) {
 	allInformers := []string{
 		utils.ServiceInformer,
 		utils.EndpointInformer,
@@ -899,7 +914,7 @@ func GetDefaultSecretForRoutes() string {
 	return DefaultRouteCert
 }
 
-func ValidateIngressForClass(key string, ingress *networkingv1beta1.Ingress) bool {
+func ValidateIngressForClass(clusterName, key string, ingress *networkingv1beta1.Ingress) bool {
 	// see whether ingress class resources are present or not
 	if !utils.GetIngressClassEnabled() {
 		return filterIngressOnClassAnnotation(key, ingress)
@@ -916,7 +931,7 @@ func ValidateIngressForClass(key string, ingress *networkingv1beta1.Ingress) boo
 		}
 	}
 
-	ingClassObj, err := utils.GetInformers().IngressClassInformer.Lister().Get(*ingress.Spec.IngressClassName)
+	ingClassObj, err := utils.GetInformersMultiCluster(clusterName).IngressClassInformer.Lister().Get(*ingress.Spec.IngressClassName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: Unable to fetch corresponding networking.k8s.io/ingressclass %s %v",
 			key, *ingress.Spec.IngressClassName, err)

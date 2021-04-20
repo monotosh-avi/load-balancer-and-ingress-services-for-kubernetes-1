@@ -30,9 +30,9 @@ type StatusOptions struct {
 }
 
 func PublishToStatusQueue(key string, statusOption StatusOptions) {
-	statusQueue := utils.SharedWorkQueue().GetQueueByName(utils.StatusQueue)
+	/*statusQueue := utils.SharedWorkQueue().GetQueueByName(utils.StatusQueue)
 	bkt := utils.Bkt(key, statusQueue.NumWorkers)
-	statusQueue.Workqueue[bkt].AddRateLimited(statusOption)
+	statusQueue.Workqueue[bkt].AddRateLimited(statusOption)*/
 }
 
 func DequeueStatus(objIntf interface{}) error {
@@ -74,7 +74,7 @@ func DequeueStatus(objIntf interface{}) error {
 		}
 	case lib.NPLService:
 		if obj.Op == lib.UpdateStatus {
-			UpdateNPLAnnotation(obj.Key, obj.Namespace, obj.ObjName)
+			UpdateNPLAnnotation("", obj.Key, obj.Namespace, obj.ObjName)
 		} else if obj.Op == lib.DeleteStatus {
 			DeleteNPLAnnotation(obj.Key, obj.Namespace, obj.ObjName)
 		}

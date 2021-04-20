@@ -30,6 +30,7 @@ import (
 // RouteIngressModel : High Level interfaces that should be implemenetd by
 // all l7 route objects, e.g: k8s ingress, openshift route
 type RouteIngressModel interface {
+	GetCluster() string
 	GetName() string
 	GetNamespace() string
 	GetType() string
@@ -50,6 +51,7 @@ type OshiftRouteModel struct {
 	key          string
 	name         string
 	namespace    string
+	cluster      string
 	spec         routev1.RouteSpec
 	infrasetting *akov1alpha1.AviInfraSetting
 	annotations  map[string]string
@@ -60,16 +62,18 @@ type K8sIngressModel struct {
 	key          string
 	name         string
 	namespace    string
+	cluster      string
 	spec         networkingv1beta1.IngressSpec
 	infrasetting *akov1alpha1.AviInfraSetting
 	annotations  map[string]string
 }
 
-func GetOshiftRouteModel(name, namespace, key string) (*OshiftRouteModel, error, bool) {
+func GetOshiftRouteModel(clusterName, name, namespace, key string) (*OshiftRouteModel, error, bool) {
 	routeModel := OshiftRouteModel{
 		key:       key,
 		name:      name,
 		namespace: namespace,
+		cluster:   clusterName,
 	}
 	processObj := true
 	processObj = utils.CheckIfNamespaceAccepted(namespace)
@@ -86,6 +90,10 @@ func GetOshiftRouteModel(name, namespace, key string) (*OshiftRouteModel, error,
 	}
 	routeModel.infrasetting, err = getL7RouteInfraSetting(key, routeObj.GetAnnotations())
 	return &routeModel, err, processObj
+}
+
+func (m *OshiftRouteModel) GetCluster() string {
+	return m.cluster
 }
 
 func (m *OshiftRouteModel) GetName() string {
@@ -150,24 +158,32 @@ func (m *OshiftRouteModel) GetAviInfraSetting() *akov1alpha1.AviInfraSetting {
 	return m.infrasetting
 }
 
-func GetK8sIngressModel(name, namespace, key string) (*K8sIngressModel, error, bool) {
+func GetK8sIngressModel(clusterName, name, namespace, key string) (*K8sIngressModel, error, bool) {
 	ingrModel := K8sIngressModel{
 		key:       key,
 		name:      name,
 		namespace: namespace,
+		cluster:   clusterName,
 	}
 	processObj := true
-	ingObj, err := utils.GetInformers().IngressInformer.Lister().Ingresses(namespace).Get(name)
+	utils.AviLog.Infof("xxx GetK8sIngressModel clustername: %v, %v, %v", clusterName, namespace, name)
+	ingObj, err := utils.GetInformersMultiCluster(clusterName).IngressInformer.Lister().Ingresses(namespace).Get(name)
+	//ingObj, err := utils.GetInformers().IngressInformer.Lister().Ingresses(namespace).Get(name)
 	if err != nil {
+		utils.AviLog.Infof("xxx GetK8sIngressModel err: %v", err)
 		return &ingrModel, err, processObj
 	}
-	processObj = lib.ValidateIngressForClass(key, ingObj) && utils.CheckIfNamespaceAccepted(namespace)
+	processObj = lib.ValidateIngressForClass(clusterName, key, ingObj) && utils.CheckIfNamespaceAccepted(namespace)
 	ingrModel.spec = ingObj.Spec
 	ingrModel.annotations = ingObj.GetAnnotations()
 	if ingObj.Spec.IngressClassName != nil {
-		ingrModel.infrasetting, err = getL7IngressInfraSetting(key, *ingObj.Spec.IngressClassName)
+		ingrModel.infrasetting, err = getL7IngressInfraSetting(clusterName, key, *ingObj.Spec.IngressClassName)
 	}
 	return &ingrModel, err, processObj
+}
+
+func (m *K8sIngressModel) GetCluster() string {
+	return m.cluster
 }
 
 func (m *K8sIngressModel) GetName() string {
@@ -235,7 +251,7 @@ func (m *K8sIngressModel) GetAviInfraSetting() *akov1alpha1.AviInfraSetting {
 	return m.infrasetting
 }
 
-func getL7IngressInfraSetting(key string, ingClassName string) (*akov1alpha1.AviInfraSetting, error) {
+func getL7IngressInfraSetting(clusterName, key string, ingClassName string) (*akov1alpha1.AviInfraSetting, error) {
 	var infraSetting *akov1alpha1.AviInfraSetting
 
 	if !utils.GetIngressClassEnabled() {
@@ -248,7 +264,7 @@ func getL7IngressInfraSetting(key string, ingClassName string) (*akov1alpha1.Avi
 		}
 	}
 
-	ingClass, err := utils.GetInformers().IngressClassInformer.Lister().Get(ingClassName)
+	ingClass, err := utils.GetInformersMultiCluster(clusterName).IngressClassInformer.Lister().Get(ingClassName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: Unable to get corresponding IngressClass %s", key, err.Error())
 		return nil, err

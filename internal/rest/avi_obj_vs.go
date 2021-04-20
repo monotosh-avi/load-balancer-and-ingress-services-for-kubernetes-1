@@ -489,9 +489,9 @@ func (rest *RestOperations) AviVsCacheAdd(rest_op *utils.RestOp, key string) err
 						Op:      lib.UpdateStatus,
 						Options: &updateOptions,
 					}
-					if utils.GetInformers().RouteInformer != nil {
+					/*if utils.GetInformers().RouteInformer != nil {
 						statusOption.ObjType = utils.OshiftRoute
-					}
+					}*/
 					status.PublishToStatusQueue(updateOptions.ServiceMetadata.IngressName, statusOption)
 				}
 				// This code is most likely hit when the first time a shard vs is created and the vs_cache_obj is populated from the pool update.
@@ -516,9 +516,9 @@ func (rest *RestOperations) AviVsCacheAdd(rest_op *utils.RestOp, key string) err
 										Op:      lib.UpdateStatus,
 										Options: &updateOptions,
 									}
-									if utils.GetInformers().RouteInformer != nil {
+									/*if utils.GetInformers().RouteInformer != nil {
 										statusOption.ObjType = utils.OshiftRoute
-									}
+									}*/
 									status.PublishToStatusQueue(updateOptions.ServiceMetadata.IngressName, statusOption)
 								}
 							}
@@ -643,9 +643,9 @@ func (rest *RestOperations) AviVsCacheDel(rest_op *utils.RestOp, vsKey avicache.
 						IsVSDel: true,
 						Options: &updateOptions,
 					}
-					if utils.GetInformers().RouteInformer != nil {
+					/*if utils.GetInformers().RouteInformer != nil {
 						statusOption.ObjType = utils.OshiftRoute
-					}
+					}*/
 					status.PublishToStatusQueue(updateOptions.ServiceMetadata.IngressName, statusOption)
 				}
 			} else {

@@ -32,6 +32,14 @@ type NPLAnnotation struct {
 	NodePort int    `json:"nodePort"`
 }
 
+func ExtractClusterNameNamespace(key string) (string, string, string, string) {
+	segments := strings.Split(key, "/")
+	if len(segments) == 4 {
+		return segments[0], segments[1], segments[2], segments[3]
+	}
+	return "", "", "", ""
+}
+
 func ExtractTypeNameNamespace(key string) (string, string, string) {
 	segments := strings.Split(key, "/")
 	if len(segments) == 3 {

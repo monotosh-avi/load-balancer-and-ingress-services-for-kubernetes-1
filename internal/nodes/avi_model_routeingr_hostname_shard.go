@@ -23,7 +23,7 @@ import (
 )
 
 // HostNameShardAndPublish: Create model from supported objects - route/ingress, and publish to rest layer
-func HostNameShardAndPublish(objType, objname, namespace, key string, fullsync bool, sharedQueue *utils.WorkerQueue) {
+func HostNameShardAndPublish(clusterName, objType, objname, namespace, key string, fullsync bool, sharedQueue *utils.WorkerQueue) {
 	utils.AviLog.Infof("key: %s, starting RouteHostNameShardAndPublish", key)
 	var routeIgrObj RouteIngressModel
 	var err error
@@ -31,21 +31,23 @@ func HostNameShardAndPublish(objType, objname, namespace, key string, fullsync b
 
 	switch objType {
 	case utils.Ingress:
-		if utils.GetInformers().IngressInformer == nil {
+		utils.AviLog.Infof("xxx RouteHostNameShardAndPublish CP0")
+
+		if utils.GetInformersMultiCluster(clusterName).IngressInformer == nil {
 			return
 		}
-		routeIgrObj, err, processObj = GetK8sIngressModel(objname, namespace, key)
+		routeIgrObj, err, processObj = GetK8sIngressModel(clusterName, objname, namespace, key)
 	case utils.OshiftRoute:
-		if utils.GetInformers().RouteInformer == nil {
+		if utils.GetInformersMultiCluster(clusterName).RouteInformer == nil {
 			return
 		}
-		routeIgrObj, err, processObj = GetOshiftRouteModel(objname, namespace, key)
+		routeIgrObj, err, processObj = GetOshiftRouteModel(clusterName, objname, namespace, key)
 
 	default:
 		utils.AviLog.Infof("key: %s, starting unsupported object type: %s", key, objType)
 		return
 	}
-
+	utils.AviLog.Infof("xxx RouteHostNameShardAndPublish CP1")
 	defer func(routeIgrObj RouteIngressModel) {
 		if aviInfraSetting := routeIgrObj.GetAviInfraSetting(); aviInfraSetting != nil {
 			objects.InfraSettingL7Lister().UpdateIngRouteInfraSettingMappings(aviInfraSetting.Name, namespace+"/"+objname)
@@ -53,6 +55,8 @@ func HostNameShardAndPublish(objType, objname, namespace, key string, fullsync b
 			objects.InfraSettingL7Lister().RemoveIngRouteInfraSettingMappings(namespace + "/" + objname)
 		}
 	}(routeIgrObj)
+
+	utils.AviLog.Infof("xxx CP2")
 
 	isIngr := routeIgrObj.GetType() == utils.Ingress
 
@@ -62,6 +66,8 @@ func HostNameShardAndPublish(objType, objname, namespace, key string, fullsync b
 	} else {
 		DeleteStaleDataForModelChange(routeIgrObj, namespace, objname, key, fullsync, sharedQueue)
 	}
+
+	utils.AviLog.Infof("xxx CP3")
 
 	if err != nil || !processObj {
 		utils.AviLog.Warnf("key: %s, msg: Error %v", key, err)

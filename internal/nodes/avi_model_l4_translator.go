@@ -137,7 +137,7 @@ func (o *AviObjectGraph) ConstructAviL4VsNode(svcObj *corev1.Service, key string
 	return avi_vs_meta
 }
 
-func (o *AviObjectGraph) ConstructAviL4PolPoolNodes(svcObj *corev1.Service, vsNode *AviVsNode, key string) {
+func (o *AviObjectGraph) ConstructAviL4PolPoolNodes(clusterName string, svcObj *corev1.Service, vsNode *AviVsNode, key string) {
 	var l4Policies []*AviL4PolicyNode
 	var portPoolSet []AviHostPathPortPoolPG
 	for _, portProto := range vsNode.PortProto {
@@ -150,21 +150,21 @@ func (o *AviObjectGraph) ConstructAviL4PolPoolNodes(svcObj *corev1.Service, vsNo
 			if svcObj.Spec.Type == "NodePort" {
 				utils.AviLog.Warnf("key: %s, msg: Service of type NodePort is not supported when `serviceType` is NodePortLocal.", key)
 			} else {
-				if servers := PopulateServersForNPL(poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
+				if servers := PopulateServersForNPL(clusterName, poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
 					poolNode.Servers = servers
 				}
 			}
 		} else if _, ok := svcObj.GetAnnotations()[lib.SkipNodePortAnnotation]; ok {
 			// This annotation's presence on the svc object means that the node ports should be skipped.
-			if servers := PopulateServers(poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
+			if servers := PopulateServers(clusterName, poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
 				poolNode.Servers = servers
 			}
 		} else if serviceType == lib.NodePort {
-			if servers := PopulateServersForNodePort(poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
+			if servers := PopulateServersForNodePort(clusterName, poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
 				poolNode.Servers = servers
 			}
 		} else {
-			if servers := PopulateServers(poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
+			if servers := PopulateServers(clusterName, poolNode, svcObj.ObjectMeta.Namespace, svcObj.ObjectMeta.Name, false, key); servers != nil {
 				poolNode.Servers = servers
 			}
 		}
@@ -189,7 +189,7 @@ func (o *AviObjectGraph) ConstructAviL4PolPoolNodes(svcObj *corev1.Service, vsNo
 
 }
 
-func PopulateServersForNPL(poolNode *AviPoolNode, ns string, serviceName string, ingress bool, key string) []AviPoolMetaServer {
+func PopulateServersForNPL(clusterName string, poolNode *AviPoolNode, ns string, serviceName string, ingress bool, key string) []AviPoolMetaServer {
 	if ingress {
 		found, _ := objects.SharedClusterIpLister().Get(ns + "/" + serviceName)
 		if !found {
@@ -204,7 +204,7 @@ func PopulateServersForNPL(poolNode *AviPoolNode, ns string, serviceName string,
 	}
 
 	var poolMeta []AviPoolMetaServer
-	svcObj, err := utils.GetInformers().ServiceInformer.Lister().Services(ns).Get(serviceName)
+	svcObj, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(ns).Get(serviceName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: error in obtaining the object for service: %s", key, serviceName)
 		return poolMeta
@@ -246,7 +246,7 @@ func PopulateServersForNPL(poolNode *AviPoolNode, ns string, serviceName string,
 	return poolMeta
 }
 
-func PopulateServersForNodePort(poolNode *AviPoolNode, ns string, serviceName string, ingress bool, key string) []AviPoolMetaServer {
+func PopulateServersForNodePort(clusterName string, poolNode *AviPoolNode, ns string, serviceName string, ingress bool, key string) []AviPoolMetaServer {
 
 	// Get all nodes which match nodePortSelector
 	nodePortSelector := lib.GetNodePortsSelector()
@@ -259,7 +259,7 @@ func PopulateServersForNodePort(poolNode *AviPoolNode, ns string, serviceName st
 	allNodes := objects.SharedNodeLister().CopyAllObjects()
 
 	var poolMeta []AviPoolMetaServer
-	svcObj, err := utils.GetInformers().ServiceInformer.Lister().Services(ns).Get(serviceName)
+	svcObj, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(ns).Get(serviceName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: error in obtaining the object for service: %s", key, serviceName)
 		return poolMeta
@@ -320,17 +320,18 @@ func PopulateServersForNodePort(poolNode *AviPoolNode, ns string, serviceName st
 	return poolMeta
 }
 
-func PopulateServers(poolNode *AviPoolNode, ns string, serviceName string, ingress bool, key string) []AviPoolMetaServer {
+func PopulateServers(clusterName string, poolNode *AviPoolNode, ns string, serviceName string, ingress bool, key string) []AviPoolMetaServer {
 	// Find the servers that match the port.
 	if ingress {
 		// If it's an ingress case, check if the service of type clusterIP or not.
-		found, _ := objects.SharedClusterIpLister().Get(ns + "/" + serviceName)
+		/*found, _ := objects.SharedClusterIpLister().Get(ns + "/" + serviceName)
 		if !found {
 			utils.AviLog.Warnf("key: %s, msg: service pointed by the ingress object is not found in ClusterIP store", key)
 			return nil
-		}
+		}*/
 	}
-	epObj, err := utils.GetInformers().EpInformer.Lister().Endpoints(ns).Get(serviceName)
+	utils.AviLog.Warnf("key: %s, populating service in cluster IP mode", key)
+	epObj, err := utils.GetInformersMultiCluster(clusterName).EpInformer.Lister().Endpoints(ns).Get(serviceName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: error while retrieving endpoints: %s", key, err)
 		return nil
@@ -384,7 +385,7 @@ func (o *AviObjectGraph) BuildL4LBGraph(namespace string, svcName string, key st
 		return
 	}
 	VsNode = o.ConstructAviL4VsNode(svcObj, key)
-	o.ConstructAviL4PolPoolNodes(svcObj, VsNode, key)
+	o.ConstructAviL4PolPoolNodes("", svcObj, VsNode, key)
 	o.AddModelNode(VsNode)
 	VsNode.CalculateCheckSum()
 	o.GraphChecksum = o.GraphChecksum + VsNode.GetCheckSum()

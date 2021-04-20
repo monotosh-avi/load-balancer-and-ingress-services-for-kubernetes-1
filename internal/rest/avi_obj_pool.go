@@ -268,9 +268,9 @@ func (rest *RestOperations) AviPoolCacheAdd(rest_op *utils.RestOp, vsKey avicach
 						Op:      lib.UpdateStatus,
 						Options: &updateOptions,
 					}
-					if utils.GetInformers().RouteInformer != nil {
+					/*if utils.GetInformers().RouteInformer != nil {
 						statusOption.ObjType = utils.OshiftRoute
-					}
+					}*/
 					status.PublishToStatusQueue(updateOptions.ServiceMetadata.IngressName, statusOption)
 				}
 			}
@@ -325,9 +325,9 @@ func (rest *RestOperations) DeletePoolIngressStatus(poolKey avicache.NamespaceNa
 					IsVSDel: isVSDelete,
 					Options: &updateOptions,
 				}
-				if utils.GetInformers().RouteInformer != nil {
+				/*if utils.GetInformers().RouteInformer != nil {
 					statusOption.ObjType = utils.OshiftRoute
-				}
+				}*/
 				status.PublishToStatusQueue(updateOptions.ServiceMetadata.IngressName, statusOption)
 			}
 		}

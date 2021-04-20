@@ -109,6 +109,7 @@ func deleteConfigFromConfigmap(cs kubernetes.Interface) bool {
 func (c *AviController) HandleConfigMap(k8sinfo K8sinformers, ctrlCh chan struct{}, stopCh <-chan struct{}, quickSyncCh chan struct{}) error {
 	cs := k8sinfo.Cs
 	aviClientPool := avicache.SharedAVIClients()
+	utils.AviLog.Infof("xxx CPP1")
 	if aviClientPool == nil || len(aviClientPool.AviClient) < 1 {
 		c.DisableSync = true
 		lib.SetDisableSync(true)
@@ -116,11 +117,16 @@ func (c *AviController) HandleConfigMap(k8sinfo K8sinformers, ctrlCh chan struct
 		lib.ShutdownApi()
 		return errors.New("Unable to contact the avi controller on bootup")
 	}
+	utils.AviLog.Infof("xxx CPP2")
+
 	aviclient := aviClientPool.AviClient[0]
-	c.DisableSync = !avicache.ValidateUserInput(aviclient) || deleteConfigFromConfigmap(cs)
+	//c.DisableSync = !avicache.ValidateUserInput(aviclient) || deleteConfigFromConfigmap(cs)
+	c.DisableSync = false
 	if c.DisableSync {
 		return errors.New("Sync is disabled because of configmap unavailability during bootup")
 	}
+	utils.AviLog.Infof("xxx CPP3")
+
 	lib.SetDisableSync(c.DisableSync)
 
 	utils.AviLog.Infof("Creating event broadcaster for handling configmap")
@@ -141,12 +147,12 @@ func (c *AviController) HandleConfigMap(k8sinfo K8sinformers, ctrlCh chan struct
 			// Check if we need to use PGs for SNIs or not.
 			lib.SetNoPGForSNI(cm.Data[lib.NO_PG_FOR_SNI])
 			lib.SetGRBACSupport(cm.Data[lib.GRBAC])
-			delModels := delConfigFromData(cm.Data)
+			/*delModels := delConfigFromData(cm.Data)
 			if !delModels {
 				status.ResetStatefulSetStatus()
 			}
 			c.DisableSync = !avicache.ValidateUserInput(aviclient) || delModels
-			lib.SetDisableSync(c.DisableSync)
+			lib.SetDisableSync(c.DisableSync)*/
 		},
 		UpdateFunc: func(old, obj interface{}) {
 			cm, ok := validateAviConfigMap(obj)
@@ -185,11 +191,11 @@ func (c *AviController) HandleConfigMap(k8sinfo K8sinformers, ctrlCh chan struct
 		},
 	}
 
-	c.informers.ConfigMapInformer.Informer().AddEventHandler(configMapEventHandler)
+	c.Informers.ConfigMapInformer.Informer().AddEventHandler(configMapEventHandler)
 
-	go c.informers.ConfigMapInformer.Informer().Run(stopCh)
+	go c.Informers.ConfigMapInformer.Informer().Run(stopCh)
 	if !cache.WaitForCacheSync(stopCh,
-		c.informers.ConfigMapInformer.Informer().HasSynced,
+		c.Informers.ConfigMapInformer.Informer().HasSynced,
 	) {
 		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
 	} else {
@@ -200,6 +206,7 @@ func (c *AviController) HandleConfigMap(k8sinfo K8sinformers, ctrlCh chan struct
 
 func (c *AviController) InitController(informers K8sinformers, registeredInformers []string, ctrlCh <-chan struct{}, stopCh <-chan struct{}, quickSyncCh chan struct{}, waitGroupMap ...map[string]*sync.WaitGroup) {
 	// set up signals so we handle the first shutdown signal gracefully
+	utils.AviLog.Infof("xxx CP1")
 	var worker *utils.FullSyncThread
 	informersArg := make(map[string]interface{})
 	informersArg[utils.INFORMERS_OPENSHIFT_CLIENT] = informers.OshiftClient
@@ -207,20 +214,22 @@ func (c *AviController) InitController(informers K8sinformers, registeredInforme
 		informersArg[utils.INFORMERS_NAMESPACE] = lib.GetNamespaceToSync()
 	}
 	informersArg[utils.INFORMERS_ADVANCED_L4] = lib.GetAdvancedL4()
-	c.informers = utils.NewInformers(utils.KubeClientIntf{ClientSet: informers.Cs}, registeredInformers, informersArg)
+	//c.Informers = utils.NewInformers(utils.KubeClientIntf{ClientSet: informers.Cs}, registeredInformers, informersArg)
 	c.dynamicInformers = lib.NewDynamicInformers(informers.DynamicClient)
 	var ingestionwg *sync.WaitGroup
 	var graphwg *sync.WaitGroup
-	var fastretrywg *sync.WaitGroup
+	/*var fastretrywg *sync.WaitGroup
 	var slowretrywg *sync.WaitGroup
-	var statusWG *sync.WaitGroup
+	var statusWG *sync.WaitGroup*/
+	utils.AviLog.Infof("xxx CP2")
+
 	if len(waitGroupMap) > 0 {
 		// Fetch all the waitgroups
 		ingestionwg, _ = waitGroupMap[0]["ingestion"]
 		graphwg, _ = waitGroupMap[0]["graph"]
-		fastretrywg, _ = waitGroupMap[0]["fastretry"]
+		/*fastretrywg, _ = waitGroupMap[0]["fastretry"]
 		slowretrywg, _ = waitGroupMap[0]["slowretry"]
-		statusWG, _ = waitGroupMap[0]["status"]
+		statusWG, _ = waitGroupMap[0]["status"]*/
 	}
 
 	/** Sequence:
@@ -235,6 +244,8 @@ func (c *AviController) InitController(informers K8sinformers, registeredInforme
 	retryQueueWorkers = 1
 	slowRetryQParams := utils.WorkerQueue{NumWorkers: retryQueueWorkers, WorkqueueName: lib.SLOW_RETRY_LAYER, SlowSyncTime: lib.SLOW_SYNC_TIME}
 	fastRetryQParams := utils.WorkerQueue{NumWorkers: retryQueueWorkers, WorkqueueName: lib.FAST_RETRY_LAYER}
+
+	utils.AviLog.Infof("xxx CP3")
 
 	numWorkers := uint32(1)
 	ingestionQueueParams := utils.WorkerQueue{NumWorkers: numWorkers, WorkqueueName: utils.ObjectIngestionLayer}
@@ -254,9 +265,13 @@ func (c *AviController) InitController(informers K8sinformers, registeredInforme
 		lib.ShutdownApi()
 	}
 
+	utils.AviLog.Infof("xxx CP4")
+
 	// Setup and start event handlers for objects.
 	c.SetupEventHandlers(informers)
 	c.Start(stopCh)
+
+	utils.AviLog.Infof("xxx CP5")
 
 	graphQueue.SyncFunc = SyncFromNodesLayer
 	graphQueue.Run(stopCh, graphwg)
@@ -272,7 +287,7 @@ func (c *AviController) InitController(informers K8sinformers, registeredInforme
 		utils.AviLog.Errorf("Cannot convert full sync interval value to integer, pls correct the value and restart AKO. Error: %s", err)
 	} else {
 		// First boot sync
-		err = c.FullSyncK8s()
+		//err = c.FullSyncK8s()
 		if err != nil {
 			// Something bad sync. We need to return and shutdown the API server
 			utils.AviLog.Errorf("Couldn't run full sync successfully on bootup, going to shutdown AKO")
@@ -293,7 +308,7 @@ func (c *AviController) InitController(informers K8sinformers, registeredInforme
 	ingestionQueue.SyncFunc = SyncFromIngestionLayer
 	ingestionQueue.Run(stopCh, ingestionwg)
 
-	fastRetryQueue := utils.SharedWorkQueue().GetQueueByName(lib.FAST_RETRY_LAYER)
+	/*fastRetryQueue := utils.SharedWorkQueue().GetQueueByName(lib.FAST_RETRY_LAYER)
 	fastRetryQueue.SyncFunc = SyncFromFastRetryLayer
 	fastRetryQueue.Run(stopCh, fastretrywg)
 
@@ -303,7 +318,8 @@ func (c *AviController) InitController(informers K8sinformers, registeredInforme
 
 	statusQueue := utils.SharedWorkQueue().GetQueueByName(utils.StatusQueue)
 	statusQueue.SyncFunc = SyncFromStatusQueue
-	statusQueue.Run(stopCh, statusWG)
+	statusQueue.Run(stopCh, statusWG)*/
+	utils.AviLog.Infof("xxx CP6")
 
 LABEL:
 	for {
@@ -320,9 +336,9 @@ LABEL:
 
 	ingestionQueue.StopWorkers(stopCh)
 	graphQueue.StopWorkers(stopCh)
-	fastRetryQueue.StopWorkers(stopCh)
+	/*fastRetryQueue.StopWorkers(stopCh)
 	slowRetryQueue.StopWorkers(stopCh)
-	statusQueue.StopWorkers(stopCh)
+	statusQueue.StopWorkers(stopCh)*/
 }
 
 func (c *AviController) FullSync() {
@@ -370,7 +386,7 @@ func (c *AviController) FullSyncK8s() error {
 		utils.AviLog.Infof("Static route sync disabled, skipping node informers")
 	} else {
 		lib.SetStaticRouteSyncHandler()
-		nodeObjects, _ := utils.GetInformers().NodeInformer.Lister().List(labels.Set(nil).AsSelector())
+		nodeObjects, _ := c.Informers.NodeInformer.Lister().List(labels.Set(nil).AsSelector())
 		for _, node := range nodeObjects {
 			key := utils.NodeObj + "/" + node.Name
 			nodes.DequeueIngestion(key, true)
@@ -392,7 +408,7 @@ func (c *AviController) FullSyncK8s() error {
 		}
 	}
 
-	svcObjs, err := utils.GetInformers().ServiceInformer.Lister().Services("").List(labels.Set(nil).AsSelector())
+	svcObjs, err := c.Informers.ServiceInformer.Lister().Services("").List(labels.Set(nil).AsSelector())
 	if err != nil {
 		utils.AviLog.Errorf("Unable to retrieve the services during full sync: %s", err)
 		return err
@@ -423,7 +439,7 @@ func (c *AviController) FullSyncK8s() error {
 	}
 
 	if lib.GetServiceType() == lib.NodePortLocal {
-		podObjs, err := utils.GetInformers().PodInformer.Lister().Pods(metav1.NamespaceAll).List(labels.Everything())
+		podObjs, err := c.Informers.PodInformer.Lister().Pods(metav1.NamespaceAll).List(labels.Everything())
 		if err != nil {
 			utils.AviLog.Errorf("Unable to retrieve the Pods during full sync: %s", err)
 			return err
@@ -466,8 +482,8 @@ func (c *AviController) FullSyncK8s() error {
 		}
 
 		// Ingress Section
-		if utils.GetInformers().IngressInformer != nil {
-			ingObjs, err := utils.GetInformers().IngressInformer.Lister().Ingresses("").List(labels.Set(nil).AsSelector())
+		if c.Informers.IngressInformer != nil {
+			ingObjs, err := c.Informers.IngressInformer.Lister().Ingresses("").List(labels.Set(nil).AsSelector())
 			if err != nil {
 				utils.AviLog.Errorf("Unable to retrieve the ingresses during full sync: %s", err)
 			} else {
@@ -484,8 +500,8 @@ func (c *AviController) FullSyncK8s() error {
 			}
 		}
 		//Route Section
-		if utils.GetInformers().RouteInformer != nil {
-			routeObjs, err := utils.GetInformers().RouteInformer.Lister().List(labels.Set(nil).AsSelector())
+		if c.Informers.RouteInformer != nil {
+			routeObjs, err := c.Informers.RouteInformer.Lister().List(labels.Set(nil).AsSelector())
 			if err != nil {
 				utils.AviLog.Errorf("Unable to retrieve the routes during full sync: %s", err)
 			} else {

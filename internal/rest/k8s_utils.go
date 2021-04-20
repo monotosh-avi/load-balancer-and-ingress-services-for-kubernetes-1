@@ -126,9 +126,9 @@ func (rest *RestOperations) SyncObjectStatuses() {
 				Options: &allIngressUpdateOptions[i],
 				IsVSDel: true,
 			}
-			if utils.GetInformers().RouteInformer != nil {
+			/*if utils.GetInformers().RouteInformer != nil {
 				statusOption.ObjType = utils.OshiftRoute
-			}
+			}*/
 			status.PublishToStatusQueue(allIngressUpdateOptions[i].ServiceMetadata.IngressName, statusOption)
 		}
 		for i := range allServiceLBUpdateOptions {

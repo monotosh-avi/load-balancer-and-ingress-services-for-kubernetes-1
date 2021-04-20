@@ -26,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func CheckNPLSvcAnnotation(key, namespace, name string) bool {
-	service, err := utils.GetInformers().ServiceInformer.Lister().Services(namespace).Get(name)
+func CheckNPLSvcAnnotation(clusterName, key, namespace, name string) bool {
+	service, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(namespace).Get(name)
 	if err != nil || service.Spec.Type == corev1.ServiceTypeNodePort {
 		return false
 	}
@@ -42,8 +42,8 @@ func CheckNPLSvcAnnotation(key, namespace, name string) bool {
 
 // UpdateSvcAnnotation updates a Service with NPL annotation, if not already annotated.
 // If the annotation is already pressent return true
-func UpdateNPLAnnotation(key, namespace, name string) {
-	service, err := utils.GetInformers().ServiceInformer.Lister().Services(namespace).Get(name)
+func UpdateNPLAnnotation(clustername, key, namespace, name string) {
+	service, err := utils.GetInformersMultiCluster(clustername).ServiceInformer.Lister().Services(namespace).Get(name)
 	if err != nil {
 		utils.AviLog.Infof("key: %s, returning without updating NPL annotation, err %v", err)
 		return

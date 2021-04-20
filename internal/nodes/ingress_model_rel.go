@@ -79,12 +79,12 @@ var (
 	HostRule = GraphSchema{
 		Type:               "HostRule",
 		GetParentIngresses: HostRuleToIng,
-		GetParentRoutes:    HostRuleToIng,
+		//GetParentRoutes:    HostRuleToIng,
 	}
 	HTTPRule = GraphSchema{
 		Type:               "HTTPRule",
 		GetParentIngresses: HTTPRuleToIng,
-		GetParentRoutes:    HTTPRuleToIng,
+		//GetParentRoutes:    HTTPRuleToIng,
 	}
 	Gateway = GraphSchema{
 		Type:              "Gateway",
@@ -120,7 +120,7 @@ var (
 
 type GraphSchema struct {
 	Type               string
-	GetParentIngresses func(string, string, string) ([]string, bool)
+	GetParentIngresses func(string, string, string, string) ([]string, bool)
 	GetParentRoutes    func(string, string, string) ([]string, bool)
 	GetParentGateways  func(string, string, string) ([]string, bool)
 	GetParentServices  func(string, string, string) ([]string, bool)
@@ -131,6 +131,7 @@ type GraphDescriptor []GraphSchema
 func RouteChanges(routeName string, namespace string, key string) ([]string, bool) {
 	var routes []string
 	routes = append(routes, routeName)
+	utils.AviLog.Infof("xxx getting route changes")
 	routeObj, err := utils.GetInformers().RouteInformer.Lister().Routes(namespace).Get(routeName)
 	if err != nil {
 		// Detect a delete condition here.
@@ -281,10 +282,12 @@ func GWClassToGateway(gwClassName string, namespace string, key string) ([]strin
 	return gateways, found
 }
 
-func IngressChanges(ingName string, namespace string, key string) ([]string, bool) {
+func IngressChanges(clusterName, ingName string, namespace string, key string) ([]string, bool) {
 	var ingresses []string
 	ingresses = append(ingresses, ingName)
-	ingObj, err := utils.GetInformers().IngressInformer.Lister().Ingresses(namespace).Get(ingName)
+	utils.AviLog.Infof("xxx getting ingress changes 1")
+
+	ingObj, err := utils.GetInformersMultiCluster(clusterName).IngressInformer.Lister().Ingresses(namespace).Get(ingName)
 
 	if err != nil {
 		// Detect a delete condition here.
@@ -309,6 +312,8 @@ func IngressChanges(ingName string, namespace string, key string) ([]string, boo
 			}
 		}
 	} else {
+		utils.AviLog.Infof("xxx getting ingress changes 2")
+
 		// simple validator check for duplicate hostpaths, logs Warning if duplicates found
 		success := validateSpecFromHostnameCache(key, ingObj.Namespace, ingObj.Name, ingObj.Spec)
 		if !success {
@@ -330,10 +335,11 @@ func IngressChanges(ingName string, namespace string, key string) ([]string, boo
 				objects.SharedSvcLister().IngressMappings(metav1.NamespaceAll).RemoveIngressClassMappings(namespace + "/" + ingName)
 			}
 		}
+		utils.AviLog.Infof("xxx getting ingress changes 3")
 
 		// If the Ingress Class is not found or is not valid, then return.
 		// When the correct Ingress Class is added, then the Ingress would be processed again.
-		if !lib.ValidateIngressForClass(key, ingObj) {
+		if !lib.ValidateIngressForClass(clusterName, key, ingObj) {
 			svcToDel := objects.SharedSvcLister().IngressMappings(namespace).RemoveIngressMappings(ingName)
 			if lib.AutoAnnotateNPLSvc() {
 				for _, svc := range svcToDel {
@@ -349,6 +355,8 @@ func IngressChanges(ingName string, namespace string, key string) ([]string, boo
 			}
 			return ingresses, true
 		}
+
+		utils.AviLog.Infof("xxx getting ingress changes 4")
 
 		_, oldSvcs := objects.SharedSvcLister().IngressMappings(namespace).GetIngToSvc(ingName)
 		currSvcs := parseServicesForIngress(ingObj.Spec, key)
@@ -370,13 +378,15 @@ func IngressChanges(ingName string, namespace string, key string) ([]string, boo
 			objects.SharedSvcLister().IngressMappings(namespace).RemoveSvcFromIngressMappings(ingName, svc)
 		}
 
+		utils.AviLog.Infof("xxx getting ingress changes 5")
+
 		svcToAdd := lib.Difference(currSvcs, oldSvcs)
 		for _, svc := range svcToAdd {
 			utils.AviLog.Debugf("key: %s, msg: updating ingress relationship for service:  %s", key, svc)
 			objects.SharedSvcLister().IngressMappings(namespace).UpdateIngressMappings(ingName, svc)
 			// Check and update NPl annotation for svc
 			if lib.AutoAnnotateNPLSvc() {
-				if !status.CheckNPLSvcAnnotation(key, namespace, svc) {
+				if !status.CheckNPLSvcAnnotation(clusterName, key, namespace, svc) {
 					statusOption := status.StatusOptions{
 						ObjType:   lib.NPLService,
 						Op:        lib.UpdateStatus,
@@ -388,6 +398,8 @@ func IngressChanges(ingName string, namespace string, key string) ([]string, boo
 				}
 			}
 		}
+		utils.AviLog.Infof("xxx getting ingress changes 6")
+
 		secrets := parseSecretsForIngress(ingObj.Spec, key)
 		if len(secrets) > 0 {
 			for _, secret := range secrets {
@@ -399,18 +411,18 @@ func IngressChanges(ingName string, namespace string, key string) ([]string, boo
 	return ingresses, true
 }
 
-func IngClassToIng(ingClassName string, namespace string, key string) ([]string, bool) {
+func IngClassToIng(clusterName, ingClassName string, namespace string, key string) ([]string, bool) {
 	found, ingresses := objects.SharedSvcLister().IngressMappings(metav1.NamespaceAll).GetClassToIng(ingClassName)
 	// Go through the list of ingresses again to populate the ingress Service mapping and annotate services if needed
 	for _, namespacedIngr := range ingresses {
 		ns, ingr := utils.ExtractNamespaceObjectName(namespacedIngr)
-		IngressChanges(ingr, ns, key)
+		IngressChanges(clusterName, ingr, ns, key)
 	}
 	return ingresses, found
 }
 
-func SvcToIng(svcName string, namespace string, key string) ([]string, bool) {
-	svc, err := utils.GetInformers().ServiceInformer.Lister().Services(namespace).Get(svcName)
+func SvcToIng(clusterName, svcName string, namespace string, key string) ([]string, bool) {
+	svc, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(namespace).Get(svcName)
 	if err != nil {
 		// Detect a delete condition here.
 		if k8serrors.IsNotFound(err) {
@@ -442,7 +454,7 @@ func SvcToIng(svcName string, namespace string, key string) ([]string, bool) {
 
 	// Check if the svc has the NPL Annotation. If not, annotate and exit without returning any ingress
 	if lib.AutoAnnotateNPLSvc() {
-		if !status.CheckNPLSvcAnnotation(key, namespace, svcName) {
+		if !status.CheckNPLSvcAnnotation(clusterName, key, namespace, svcName) {
 			statusOption := status.StatusOptions{
 				ObjType:   lib.NPLService,
 				Op:        lib.UpdateStatus,
@@ -457,10 +469,10 @@ func SvcToIng(svcName string, namespace string, key string) ([]string, bool) {
 	return ingresses, true
 }
 
-func NodeToIng(nodeName string, namespace string, key string) ([]string, bool) {
+func NodeToIng(clusterName, nodeName string, namespace string, key string) ([]string, bool) {
 	// As node create/update affects all ingresses in the system
 	// Post this, filtered ingresses for each service is fetched for all services.
-	if !lib.IsNodePortMode() || utils.GetInformers().IngressInformer == nil {
+	if !lib.IsNodePortMode() || utils.GetInformersMultiCluster(clusterName).IngressInformer == nil {
 		return nil, false
 	}
 	ingresses := []string{}
@@ -471,7 +483,7 @@ func NodeToIng(nodeName string, namespace string, key string) ([]string, bool) {
 func NodeToRoute(nodeName string, namespace string, key string) ([]string, bool) {
 	// As node create/update affects all routes in the system return true in NodePort mode.
 	// post this, filtered routes for each service is fetched for all services.
-	if !lib.IsNodePortMode() || utils.GetInformers().RouteInformer == nil {
+	if !lib.IsNodePortMode() {
 		return nil, false
 	}
 	routes := []string{}
@@ -482,7 +494,7 @@ func NodeToRoute(nodeName string, namespace string, key string) ([]string, bool)
 // PodToIng fetches the list of impacted Ingresses from Pod update.
 // First fetch list of Services for the Pod.
 // Then get list of Ingresses for the Services.
-func PodToIng(podName string, namespace string, key string) ([]string, bool) {
+func PodToIng(clusterName, podName string, namespace string, key string) ([]string, bool) {
 	var allIngresses []string
 	podKey := namespace + "/" + podName
 	ok, servicesIntf := objects.SharedPodToSvcLister().Get(podKey)
@@ -493,20 +505,20 @@ func PodToIng(podName string, namespace string, key string) ([]string, bool) {
 	utils.AviLog.Debugf("key: %s, msg: Services retrieved:  %s", key, services)
 	for _, svc := range services {
 		_, svcName := utils.ExtractNamespaceObjectName(svc)
-		ingresses, _ := SvcToIng(svcName, namespace, key)
+		ingresses, _ := SvcToIng(clusterName, svcName, namespace, key)
 		allIngresses = append(allIngresses, ingresses...)
 	}
 	utils.AviLog.Debugf("key: %s, msg: Ingresses retrieved:  %s", key, allIngresses)
 	return allIngresses, true
 }
 
-func EPToIng(epName string, namespace string, key string) ([]string, bool) {
-	ingresses, found := SvcToIng(epName, namespace, key)
+func EPToIng(clusterName, epName string, namespace string, key string) ([]string, bool) {
+	ingresses, found := SvcToIng(clusterName, epName, namespace, key)
 	utils.AviLog.Debugf("key: %s, msg: Ingresses retrieved %s", key, ingresses)
 	return ingresses, found
 }
 
-func SecretToIng(secretName string, namespace string, key string) ([]string, bool) {
+func SecretToIng(clusterName, secretName string, namespace string, key string) ([]string, bool) {
 	ok, ingNames := objects.SharedSvcLister().IngressMappings(namespace).GetSecretToIng(secretName)
 	utils.AviLog.Debugf("key: %s, msg: Ingresses retrieved %s", key, ingNames)
 	if ok {
@@ -541,7 +553,7 @@ func parseServicesForRoute(routeSpec routev1.RouteSpec, key string) []string {
 	return services
 }
 
-func HostRuleToIng(hrname string, namespace string, key string) ([]string, bool) {
+func HostRuleToIng(clusterName, hrname string, namespace string, key string) ([]string, bool) {
 	var err error
 	var oldFqdn, fqdn string
 	var oldFound bool
@@ -601,7 +613,7 @@ func HostRuleToIng(hrname string, namespace string, key string) ([]string, bool)
 	return allIngresses, true
 }
 
-func HTTPRuleToIng(rrname string, namespace string, key string) ([]string, bool) {
+func HTTPRuleToIng(clusterName, rrname string, namespace string, key string) ([]string, bool) {
 	var err error
 	allIngresses := make([]string, 0)
 	httprule, err := lib.GetCRDInformers().HTTPRuleInformer.Lister().HTTPRules(namespace).Get(rrname)
@@ -693,7 +705,7 @@ func HTTPRuleToIng(rrname string, namespace string, key string) ([]string, bool)
 	return allIngresses, true
 }
 
-func AviSettingToIng(infraSettingName, namespace, key string) ([]string, bool) {
+func AviSettingToIng(clusterName, infraSettingName, namespace, key string) ([]string, bool) {
 	allIngresses := make([]string, 0)
 
 	if !utils.GetIngressClassEnabled() {
@@ -702,7 +714,7 @@ func AviSettingToIng(infraSettingName, namespace, key string) ([]string, bool) {
 	}
 
 	// Get all IngressClasses from AviInfraSetting.
-	ingClasses, err := utils.GetInformers().IngressClassInformer.Informer().GetIndexer().ByIndex(lib.AviSettingIngClassIndex, lib.AkoGroup+"/"+lib.AviInfraSetting+"/"+infraSettingName)
+	ingClasses, err := utils.GetInformersMultiCluster(clusterName).IngressClassInformer.Informer().GetIndexer().ByIndex(lib.AviSettingIngClassIndex, lib.AkoGroup+"/"+lib.AviInfraSetting+"/"+infraSettingName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: Unable to fetch IngressClasses corresponding to AviInfraSetting %s", key, infraSettingName)
 		return allIngresses, false
@@ -710,7 +722,7 @@ func AviSettingToIng(infraSettingName, namespace, key string) ([]string, bool) {
 
 	for _, ingClass := range ingClasses {
 		if ingClassObj, isIngClass := ingClass.(*networkingv1beta1.IngressClass); isIngClass {
-			if ingresses, found := IngClassToIng(ingClassObj.Name, namespace, key); found {
+			if ingresses, found := IngClassToIng(clusterName, ingClassObj.Name, namespace, key); found {
 				allIngresses = append(allIngresses, ingresses...)
 			}
 		}

@@ -644,15 +644,15 @@ func (o *AviObjectGraph) BuildPolicyPGPoolsForEVH(vsNode []*AviEvhVsNode, childN
 
 		serviceType := lib.GetServiceType()
 		if serviceType == lib.NodePortLocal {
-			if servers := PopulateServersForNPL(poolNode, namespace, path.ServiceName, true, key); servers != nil {
+			if servers := PopulateServersForNPL("", poolNode, namespace, path.ServiceName, true, key); servers != nil {
 				poolNode.Servers = servers
 			}
 		} else if serviceType == lib.NodePort {
-			if servers := PopulateServersForNodePort(poolNode, namespace, path.ServiceName, true, key); servers != nil {
+			if servers := PopulateServersForNodePort("", poolNode, namespace, path.ServiceName, true, key); servers != nil {
 				poolNode.Servers = servers
 			}
 		} else {
-			if servers := PopulateServers(poolNode, namespace, path.ServiceName, true, key); servers != nil {
+			if servers := PopulateServers("", poolNode, namespace, path.ServiceName, true, key); servers != nil {
 				poolNode.Servers = servers
 			}
 		}

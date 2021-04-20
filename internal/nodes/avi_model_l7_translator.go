@@ -180,8 +180,8 @@ func (o *AviObjectGraph) BuildCACertNode(tlsNode *AviVsNode, cacert, keycertname
 	return cacertNode.Name
 }
 
-func (o *AviObjectGraph) BuildTlsCertNode(svcLister *objects.SvcLister, tlsNode *AviVsNode, namespace string, tlsData TlsSettings, key, infraSettingName, sniHost string) bool {
-	mClient := utils.GetInformers().ClientSet
+func (o *AviObjectGraph) BuildTlsCertNode(clusterName string, svcLister *objects.SvcLister, tlsNode *AviVsNode, namespace string, tlsData TlsSettings, key, infraSettingName, sniHost string) bool {
+	mClient := utils.GetInformersMultiCluster(clusterName).ClientSet
 	secretName := tlsData.SecretName
 	secretNS := tlsData.SecretNS
 	if secretNS == "" {
@@ -257,7 +257,7 @@ func (o *AviObjectGraph) BuildTlsCertNode(svcLister *objects.SvcLister, tlsNode 
 	return true
 }
 
-func (o *AviObjectGraph) BuildPolicyPGPoolsForSNI(vsNode []*AviVsNode, tlsNode *AviVsNode, namespace string, ingName string, hostpath TlsSettings, secretName string, key string, isIngr bool, infraSettingName, hostName string) {
+func (o *AviObjectGraph) BuildPolicyPGPoolsForSNI(clusterName string, vsNode []*AviVsNode, tlsNode *AviVsNode, namespace string, ingName string, hostpath TlsSettings, secretName string, key string, isIngr bool, infraSettingName, hostName string) {
 	localPGList := make(map[string]*AviPoolGroupNode)
 	var sniFQDNs []string
 	for host, paths := range hostpath.Hosts {
@@ -343,15 +343,15 @@ func (o *AviObjectGraph) BuildPolicyPGPoolsForSNI(vsNode []*AviVsNode, tlsNode *
 			}
 			serviceType := lib.GetServiceType()
 			if serviceType == lib.NodePortLocal {
-				if servers := PopulateServersForNPL(poolNode, namespace, path.ServiceName, true, key); servers != nil {
+				if servers := PopulateServersForNPL(clusterName, poolNode, namespace, path.ServiceName, true, key); servers != nil {
 					poolNode.Servers = servers
 				}
 			} else if serviceType == lib.NodePort {
-				if servers := PopulateServersForNodePort(poolNode, namespace, path.ServiceName, true, key); servers != nil {
+				if servers := PopulateServersForNodePort(clusterName, poolNode, namespace, path.ServiceName, true, key); servers != nil {
 					poolNode.Servers = servers
 				}
 			} else {
-				if servers := PopulateServers(poolNode, namespace, path.ServiceName, true, key); servers != nil {
+				if servers := PopulateServers(clusterName, poolNode, namespace, path.ServiceName, true, key); servers != nil {
 					poolNode.Servers = servers
 				}
 			}

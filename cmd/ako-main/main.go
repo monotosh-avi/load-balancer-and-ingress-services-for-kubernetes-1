@@ -117,7 +117,7 @@ func InitializeAKC() {
 		utils.AviLog.Warnf("Error in creating openshift clientset")
 	}
 
-	registeredInformers, err := lib.InformersToRegister(oshiftClient, kubeClient)
+	registeredInformers, err := lib.InformersToRegister(oshiftClient, kubeClient, "")
 	if err != nil {
 		utils.AviLog.Fatalf("Failed to initialize informers: %v, shutting down AKO, going to reboot", err)
 	}
@@ -129,7 +129,7 @@ func InitializeAKC() {
 		informersArg[utils.INFORMERS_NAMESPACE] = lib.GetNamespaceToSync()
 	}
 	informersArg[utils.INFORMERS_ADVANCED_L4] = lib.GetAdvancedL4()
-	utils.NewInformers(utils.KubeClientIntf{ClientSet: kubeClient}, registeredInformers, informersArg)
+	//utils.NewInformers(utils.KubeClientIntf{ClientSet: kubeClient}, registeredInformers, informersArg)
 	lib.NewDynamicInformers(dynamicClient)
 	if lib.GetAdvancedL4() {
 		k8s.NewAdvL4Informers(advl4Client)
@@ -140,18 +140,18 @@ func InitializeAKC() {
 		}
 	}
 
-	informers := k8s.K8sinformers{Cs: kubeClient, DynamicClient: dynamicClient, OshiftClient: oshiftClient}
-	c := k8s.SharedAviController()
+	//informers := k8s.K8sinformers{Cs: kubeClient, DynamicClient: dynamicClient, OshiftClient: oshiftClient}
+	//c := k8s.SharedAviController()
 	stopCh := utils.SetupSignalHandler()
 	ctrlCh := make(chan struct{})
 	quickSyncCh := make(chan struct{})
-	err = c.HandleConfigMap(informers, ctrlCh, stopCh, quickSyncCh)
+	//err = c.HandleConfigMap(informers, ctrlCh, stopCh, quickSyncCh)
 	if err != nil {
 		utils.AviLog.Errorf("Handleconfigmap error during reboot, shutting down AKO")
 		return
 	}
 
-	c.InitializeNamespaceSync()
+	//c.InitializeNamespaceSync()
 	k8s.PopulateNodeCache(kubeClient)
 	waitGroupMap := make(map[string]*sync.WaitGroup)
 	wgIngestion := &sync.WaitGroup{}
@@ -164,7 +164,26 @@ func InitializeAKC() {
 	waitGroupMap["graph"] = wgGraph
 	wgStatus := &sync.WaitGroup{}
 	waitGroupMap["status"] = wgStatus
-	go c.InitController(informers, registeredInformers, ctrlCh, stopCh, quickSyncCh, waitGroupMap)
+	//go c.InitController(informers, registeredInformers, ctrlCh, stopCh, quickSyncCh, waitGroupMap)
+
+	ctrls, _ := InitializeMemberClusters(kubeconfig, []string{"kubernetes1-admin", "kubernetes2-admin"}, stopCh)
+	//ctrls, _ := InitializeMemberClusters(kubeconfig, []string{"kubernetes1-admin"}, stopCh)
+	for i, c := range ctrls {
+		utils.AviLog.Infof("xxx CP0: %v", c.ClusterName)
+		if i == 0 {
+			c.HandleConfigMap(c.K8sInfo, ctrlCh, stopCh, quickSyncCh)
+			utils.AviLog.Infof("xxx CP01")
+
+			go c.InitController(c.K8sInfo, registeredInformers, ctrlCh, stopCh, quickSyncCh, waitGroupMap)
+			utils.AviLog.Infof("xxx CP02")
+		} else {
+			c.HandleConfigMap(c.K8sInfo, ctrlCh, stopCh, quickSyncCh)
+			c.SetupEventHandlers(c.K8sInfo)
+			c.Start(stopCh)
+		}
+
+	}
+
 	<-stopCh
 	close(ctrlCh)
 	doneChan := make(chan struct{})

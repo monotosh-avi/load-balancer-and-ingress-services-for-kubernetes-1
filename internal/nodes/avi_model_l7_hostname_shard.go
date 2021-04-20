@@ -65,9 +65,9 @@ func (o *AviObjectGraph) BuildL7VSGraphHostNameShard(vsName, hostname string, ro
 		// Using servicename in poolname for routes, but not in ingress for consistency with existing naming convention.
 		// If possible, we would make this uniform
 		if routeIgrObj.GetType() == utils.Ingress {
-			poolName = lib.GetL7PoolName(priorityLabel, namespace, ingName, infraSettingName)
+			poolName = lib.GetL7PoolNameMultiCluster(routeIgrObj.GetCluster(), priorityLabel, namespace, ingName, infraSettingName)
 		} else {
-			poolName = lib.GetL7PoolName(priorityLabel, namespace, ingName, infraSettingName, obj.ServiceName)
+			poolName = lib.GetL7PoolNameMultiCluster(routeIgrObj.GetCluster(), priorityLabel, namespace, ingName, infraSettingName, obj.ServiceName)
 		}
 
 		// First check if there are pools related to this ingress present in the model already
@@ -108,15 +108,15 @@ func (o *AviObjectGraph) BuildL7VSGraphHostNameShard(vsName, hostname string, ro
 			poolNode.VrfContext = lib.GetVrf()
 			serviceType := lib.GetServiceType()
 			if serviceType == lib.NodePortLocal {
-				if servers := PopulateServersForNPL(poolNode, namespace, obj.ServiceName, true, key); servers != nil {
+				if servers := PopulateServersForNPL(routeIgrObj.GetCluster(), poolNode, namespace, obj.ServiceName, true, key); servers != nil {
 					poolNode.Servers = servers
 				}
 			} else if serviceType == lib.NodePort {
-				if servers := PopulateServersForNodePort(poolNode, namespace, obj.ServiceName, true, key); servers != nil {
+				if servers := PopulateServersForNodePort(routeIgrObj.GetCluster(), poolNode, namespace, obj.ServiceName, true, key); servers != nil {
 					poolNode.Servers = servers
 				}
 			} else {
-				if servers := PopulateServers(poolNode, namespace, obj.ServiceName, true, key); servers != nil {
+				if servers := PopulateServers(routeIgrObj.GetCluster(), poolNode, namespace, obj.ServiceName, true, key); servers != nil {
 					poolNode.Servers = servers
 				}
 			}
@@ -165,9 +165,9 @@ func (o *AviObjectGraph) DeletePoolForHostname(vsName, hostname string, routeIgr
 				}
 				for _, svcName := range services {
 					if routeIgrObj.GetType() == utils.Ingress {
-						poolName = lib.GetL7PoolName(priorityLabel, namespace, ingName, infraSettingName)
+						poolName = lib.GetL7PoolNameMultiCluster(routeIgrObj.GetCluster(), priorityLabel, namespace, ingName, infraSettingName)
 					} else {
-						poolName = lib.GetL7PoolName(priorityLabel, namespace, ingName, infraSettingName, svcName)
+						poolName = lib.GetL7PoolNameMultiCluster(routeIgrObj.GetCluster(), priorityLabel, namespace, ingName, infraSettingName, svcName)
 					}
 					if poolName == pool.Name {
 						o.RemovePoolNodeRefs(poolName)
@@ -356,11 +356,11 @@ func sniNodeHostName(routeIgrObj RouteIngressModel, tlssetting TlsSettings, ingN
 		sniNode.ServiceEngineGroup = lib.GetSEGName()
 		sniNode.VrfContext = lib.GetVrf()
 		if !certsBuilt {
-			certsBuilt = aviModel.(*AviObjectGraph).BuildTlsCertNode(routeIgrObj.GetSvcLister(), sniNode, namespace, tlssetting, key, infraSettingName, sniHost)
+			certsBuilt = aviModel.(*AviObjectGraph).BuildTlsCertNode(routeIgrObj.GetCluster(), routeIgrObj.GetSvcLister(), sniNode, namespace, tlssetting, key, infraSettingName, sniHost)
 		}
 		if certsBuilt {
 			isIngr := routeIgrObj.GetType() == utils.Ingress
-			aviModel.(*AviObjectGraph).BuildPolicyPGPoolsForSNI(vsNode, sniNode, namespace, ingName, tlssetting, sniSecretName, key, isIngr, infraSettingName, sniHost)
+			aviModel.(*AviObjectGraph).BuildPolicyPGPoolsForSNI(routeIgrObj.GetCluster(), vsNode, sniNode, namespace, ingName, tlssetting, sniSecretName, key, isIngr, infraSettingName, sniHost)
 			foundSniModel := FindAndReplaceSniInModel(sniNode, vsNode, key)
 			if !foundSniModel {
 				vsNode[0].SniNodes = append(vsNode[0].SniNodes, sniNode)
