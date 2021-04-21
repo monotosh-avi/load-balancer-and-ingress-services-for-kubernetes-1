@@ -166,7 +166,7 @@ func InitializeAKC() {
 	waitGroupMap["status"] = wgStatus
 	//go c.InitController(informers, registeredInformers, ctrlCh, stopCh, quickSyncCh, waitGroupMap)
 
-	ctrls, _ := InitializeMemberClusters(kubeconfig, []string{"kubernetes1-admin", "kubernetes2-admin"}, stopCh)
+	ctrls, _ := InitializeMemberClusters(kubeconfig, []string{"cluster1", "cluster3"}, stopCh)
 	//ctrls, _ := InitializeMemberClusters(kubeconfig, []string{"kubernetes1-admin"}, stopCh)
 	for i, c := range ctrls {
 		utils.AviLog.Infof("xxx CP0: %v", c.ClusterName)

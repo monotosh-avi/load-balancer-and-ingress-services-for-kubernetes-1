@@ -259,7 +259,7 @@ func NewInformers(kubeClient KubeClientIntf, registeredInformers []string, args 
 
 func GetInformers() *Informers {
 	if informerInstance == nil {
-		AviLog.Fatal("Cannot retrieve the informers since it's not initialized yet.")
+		AviLog.Infof("Cannot retrieve the informers since it's not initialized yet.")
 		return nil
 	}
 	return informerInstance

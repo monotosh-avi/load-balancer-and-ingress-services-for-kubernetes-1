@@ -197,7 +197,7 @@ func PopulateServersForNPL(clusterName string, poolNode *AviPoolNode, ns string,
 			return nil
 		}
 	}
-	pods := lib.GetPodsFromService(ns, serviceName)
+	pods := lib.GetPodsFromService(clusterName, ns, serviceName)
 	if len(pods) == 0 {
 		utils.AviLog.Infof("key: %s, msg: got no Pod for Service %s", key, serviceName)
 		return make([]AviPoolMetaServer, 0)
@@ -375,11 +375,11 @@ func PopulateServers(clusterName string, poolNode *AviPoolNode, ns string, servi
 	return pool_meta
 }
 
-func (o *AviObjectGraph) BuildL4LBGraph(namespace string, svcName string, key string) {
+func (o *AviObjectGraph) BuildL4LBGraph(clusterName, namespace string, svcName string, key string) {
 	o.Lock.Lock()
 	defer o.Lock.Unlock()
 	var VsNode *AviVsNode
-	svcObj, err := utils.GetInformers().ServiceInformer.Lister().Services(namespace).Get(svcName)
+	svcObj, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(namespace).Get(svcName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: error in obtaining the object for service: %s", key, svcName)
 		return

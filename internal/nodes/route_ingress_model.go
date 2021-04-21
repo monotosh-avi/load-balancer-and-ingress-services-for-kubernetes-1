@@ -257,7 +257,7 @@ func getL7IngressInfraSetting(clusterName, key string, ingClassName string) (*ak
 	if !utils.GetIngressClassEnabled() {
 		return nil, nil
 	} else if ingClassName == "" {
-		if defaultIngressClass, found := lib.IsAviLBDefaultIngressClass(); !found {
+		if defaultIngressClass, found := lib.IsAviLBDefaultIngressClass(clusterName); !found {
 			return nil, nil
 		} else {
 			ingClassName = defaultIngressClass

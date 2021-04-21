@@ -324,7 +324,7 @@ func IngressChanges(clusterName, ingName string, namespace string, key string) (
 			var ingClassName string
 			if ingObj.Spec.IngressClassName != nil {
 				ingClassName = *ingObj.Spec.IngressClassName
-			} else if aviIngClassName, found := lib.IsAviLBDefaultIngressClass(); found {
+			} else if aviIngClassName, found := lib.IsAviLBDefaultIngressClass(clusterName); found {
 				// check if default IngressClass is present, and it is Avi's IngressClass, in which case add mapping for that.
 				ingClassName = aviIngClassName
 			}

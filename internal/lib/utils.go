@@ -102,10 +102,10 @@ func GetSvcKeysForNodeCRUD() (svcl4Keys []string, svcl7Keys []string) {
 
 }
 
-func GetPodsFromService(namespace, serviceName string) []utils.NamespaceName {
+func GetPodsFromService(clusterName, namespace, serviceName string) []utils.NamespaceName {
 	var pods []utils.NamespaceName
 	svcKey := namespace + "/" + serviceName
-	svc, err := utils.GetInformers().ServiceInformer.Lister().Services(namespace).Get(serviceName)
+	svc, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(namespace).Get(serviceName)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return pods
@@ -123,7 +123,7 @@ func GetPodsFromService(namespace, serviceName string) []utils.NamespaceName {
 		return pods
 	}
 
-	podList, err := utils.GetInformers().PodInformer.Lister().Pods(namespace).List(labels.SelectorFromSet(labels.Set(svc.Spec.Selector)))
+	podList, err := utils.GetInformersMultiCluster(clusterName).PodInformer.Lister().Pods(namespace).List(labels.SelectorFromSet(labels.Set(svc.Spec.Selector)))
 	if err != nil {
 		utils.AviLog.Warnf("Got error while listing Pods with selector %v: %v", svc.Spec.Selector, err)
 		return pods
@@ -136,9 +136,9 @@ func GetPodsFromService(namespace, serviceName string) []utils.NamespaceName {
 	return pods
 }
 
-func GetServicesForPod(pod *corev1.Pod) ([]string, []string) {
+func GetServicesForPod(clusterName string, pod *corev1.Pod) ([]string, []string) {
 	var svcList, lbList []string
-	services, err := utils.GetInformers().ServiceInformer.Lister().List(labels.Everything())
+	services, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().List(labels.Everything())
 	if err != nil {
 		utils.AviLog.Warnf("Got error while listing Services with NPL annotation: %v", err)
 		return svcList, lbList

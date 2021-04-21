@@ -922,7 +922,7 @@ func ValidateIngressForClass(clusterName, key string, ingress *networkingv1beta1
 
 	if ingress.Spec.IngressClassName == nil {
 		// check whether avi-lb ingress class is set as the default ingress class
-		if _, found := IsAviLBDefaultIngressClass(); found {
+		if _, found := IsAviLBDefaultIngressClass(clusterName); found {
 			utils.AviLog.Infof("key: %s, msg: ingress class name is not specified but ako.vmware.com/avi-lb is default ingress controller", key)
 			return true
 		} else {
@@ -972,8 +972,8 @@ func filterIngressOnClassAnnotation(key string, ingress *networkingv1beta1.Ingre
 	}
 }
 
-func IsAviLBDefaultIngressClass() (string, bool) {
-	ingClassObjs, _ := utils.GetInformers().IngressClassInformer.Lister().List(labels.Set(nil).AsSelector())
+func IsAviLBDefaultIngressClass(clusterName string) (string, bool) {
+	ingClassObjs, _ := utils.GetInformersMultiCluster(clusterName).IngressClassInformer.Lister().List(labels.Set(nil).AsSelector())
 	for _, ingClass := range ingClassObjs {
 		if ingClass.Spec.Controller == AviIngressController {
 			annotations := ingClass.GetAnnotations()

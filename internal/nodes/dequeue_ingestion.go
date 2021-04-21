@@ -145,7 +145,7 @@ func DequeueIngestion(key string, fullsync bool) {
 			if svcObj.Spec.Type == utils.LoadBalancer && !lib.GetLayer7Only() && utils.CheckIfNamespaceAccepted(namespace) {
 				// This endpoint update affects a LB service.
 				aviModelGraph := NewAviObjectGraph()
-				aviModelGraph.BuildL4LBGraph(namespace, name, key)
+				aviModelGraph.BuildL4LBGraph(clusterName, namespace, name, key)
 				if len(aviModelGraph.GetOrderedNodes()) > 0 {
 					model_name := lib.GetModelName(lib.GetTenant(), aviModelGraph.GetAviVS()[0].Name)
 					ok := saveAviModel(model_name, aviModelGraph, key)
@@ -199,7 +199,7 @@ func DequeueIngestion(key string, fullsync bool) {
 func handlePod(clusterName, key, namespace, podName string, fullsync bool) {
 	utils.AviLog.Debugf("key: %s, msg: handing Pod", key)
 	podKey := namespace + "/" + podName
-	pod, err := utils.GetInformers().PodInformer.Lister().Pods(namespace).Get(podName)
+	pod, err := utils.GetInformersMultiCluster(clusterName).PodInformer.Lister().Pods(namespace).Get(podName)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			utils.AviLog.Infof("key: %s, got error while getting pod: %v", key, err)
@@ -234,7 +234,7 @@ func handlePod(clusterName, key, namespace, podName string, fullsync bool) {
 		}
 		objects.SharedNPLLister().Save(podKey, annotations)
 		if utils.IsServiceNSValid(namespace) {
-			services, lbSvcs := lib.GetServicesForPod(pod)
+			services, lbSvcs := lib.GetServicesForPod(clusterName, pod)
 			if len(services) != 0 {
 				objects.SharedPodToSvcLister().Save(podKey, services)
 			}
@@ -325,7 +325,7 @@ func handleL4Service(clusterName, key string, fullsync bool) {
 	_, namespace, name := lib.ExtractTypeNameNamespace(key)
 	sharedQueue := utils.SharedWorkQueue().GetQueueByName(utils.GraphLayer)
 	// L4 type of services need special handling. We create a dedicated VS in Avi for these.
-	if !isServiceDelete(name, namespace, key) && utils.CheckIfNamespaceAccepted(namespace) {
+	if !isServiceDelete(clusterName, name, namespace, key) && utils.CheckIfNamespaceAccepted(namespace) {
 		// If Service is Not Annotated with NPL annotation, annotate the service and return.
 		if lib.AutoAnnotateNPLSvc() {
 			if !status.CheckNPLSvcAnnotation(clusterName, key, namespace, name) {
@@ -342,7 +342,7 @@ func handleL4Service(clusterName, key string, fullsync bool) {
 		}
 		utils.AviLog.Infof("key: %s, msg: service is of type loadbalancer. Will create dedicated VS nodes", key)
 		aviModelGraph := NewAviObjectGraph()
-		aviModelGraph.BuildL4LBGraph(namespace, name, key)
+		aviModelGraph.BuildL4LBGraph(clusterName, namespace, name, key)
 
 		// Save the LB service in memory
 		objects.SharedlbLister().Save(namespace+"/"+name, name)
@@ -428,7 +428,7 @@ func saveAviModel(model_name string, aviGraph *AviObjectGraph, key string) bool 
 }
 
 func processNodeObj(key, nodename string, sharedQueue *utils.WorkerQueue, fullsync bool) {
-	utils.AviLog.Debugf("key: %s, Got node Object %s\n", key, nodename)
+	utils.AviLog.Infof("key: %s, Got node Object %s\n", key, nodename)
 	nodeObj, err := utils.GetInformers().NodeInformer.Lister().Get(nodename)
 	if err == nil {
 		utils.AviLog.Debugf("key: %s, Node Object %v\n", key, nodeObj)
@@ -466,9 +466,9 @@ func PublishKeyToRestLayer(model_name string, key string, sharedQueue *utils.Wor
 
 }
 
-func isServiceDelete(svcName string, namespace string, key string) bool {
+func isServiceDelete(clusterName, svcName string, namespace string, key string) bool {
 	// If the service is not found we return true.
-	_, err := utils.GetInformers().ServiceInformer.Lister().Services(namespace).Get(svcName)
+	_, err := utils.GetInformersMultiCluster(clusterName).ServiceInformer.Lister().Services(namespace).Get(svcName)
 	if err != nil {
 		utils.AviLog.Warnf("key: %s, msg: could not retrieve the object for service: %s", key, err)
 		if errors.IsNotFound(err) {
