@@ -167,6 +167,9 @@ func InitializeAKC() {
 	//go c.InitController(informers, registeredInformers, ctrlCh, stopCh, quickSyncCh, waitGroupMap)
 
 	ctrls, _ := InitializeMemberClusters(kubeconfig, []string{"cluster1", "cluster3"}, stopCh)
+	lib.InitSEGNameMultiCluster()
+	lib.SetSEGNameMultiCluster("cluster1", "cluster1-se-grp")
+	lib.SetSEGNameMultiCluster("cluster3", "Default-Group")
 	//ctrls, _ := InitializeMemberClusters(kubeconfig, []string{"kubernetes1-admin"}, stopCh)
 	for i, c := range ctrls {
 		utils.AviLog.Infof("xxx CP0: %v", c.ClusterName)

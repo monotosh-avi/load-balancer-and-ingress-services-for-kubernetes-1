@@ -84,7 +84,7 @@ func (o *AviObjectGraph) ConstructAviL7VsNode(vsName string, key string, routeIg
 		Name:               vsName,
 		Tenant:             lib.GetTenant(),
 		SharedVS:           true,
-		ServiceEngineGroup: lib.GetSEGName(),
+		ServiceEngineGroup: lib.GetSEGNameMultiCluster(routeIgrObj.GetCluster()),
 	}
 
 	// Hard coded ports for the shared VS

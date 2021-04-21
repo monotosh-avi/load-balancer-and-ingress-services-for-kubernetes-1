@@ -196,7 +196,7 @@ func (rest *RestOperations) AviVsSniBuild(vs_meta *nodes.AviVsNode, rest_method 
 	cloudRef := "/api/cloud?name=" + utils.CloudName
 	network_prof := "/api/networkprofile/?name=" + "System-TCP-Proxy"
 	vrfContextRef := "/api/vrfcontext?name=" + vs_meta.VrfContext
-	seGroupRef := "/api/serviceenginegroup?name=" + lib.GetSEGName()
+	seGroupRef := "/api/serviceenginegroup?name=" + vs_meta.ServiceEngineGroup
 	svc_mdata_json, _ := json.Marshal(&vs_meta.ServiceMetadata)
 	svc_mdata := string(svc_mdata_json)
 	sniChild := &avimodels.VirtualService{

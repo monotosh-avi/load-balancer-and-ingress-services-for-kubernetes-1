@@ -490,6 +490,21 @@ func GetSEGName() string {
 	return DEFAULT_SE_GROUP
 }
 
+var SegName map[string]string
+
+func InitSEGNameMultiCluster() {
+	SegName = make(map[string]string)
+}
+
+func SetSEGNameMultiCluster(clusterName, segName string) {
+	//SegName1 := make(map[string]string)
+	SegName[clusterName] = segName
+}
+
+func GetSEGNameMultiCluster(clusterName string) string {
+	return SegName[clusterName]
+}
+
 func GetNodeNetworkMap() (map[string][]string, error) {
 
 	nodeNetworkMap := make(map[string][]string)
